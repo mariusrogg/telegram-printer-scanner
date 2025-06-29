@@ -20,7 +20,7 @@ type scannerMode string
 
 const (
 	color scannerMode = "Color"
-	grey  scannerMode = "Grey"
+	gray  scannerMode = "Gray"
 )
 
 type scannerFunction struct {
@@ -112,6 +112,7 @@ type scanResponseBody struct {
 }
 
 func (function scannerFunction) scan(endpoint string, scannerId string, callback func(file io.ReadCloser, fileName string)) bool {
+	fmt.Println("Starting scan")
 	var err error
 	body := newScanBody(function, scannerId)
 	marshalled, err := json.Marshal(body)
@@ -126,7 +127,47 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 	}
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println("Post failed with status code: " + resp.Status)
-		return false
+		if resp.StatusCode == http.StatusInternalServerError {
+			fmt.Printf("Trying to reload scanners\n")
+			req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/v1/context", nil)
+			if err != nil {
+				fmt.Println("Could not create delete request for scanners")
+				return false
+			}
+			client := &http.Client{}
+			fmt.Printf("Delete scanners\n")
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Println("Could not delete scanners " + err.Error())
+				return false
+			}
+			if resp.StatusCode != http.StatusOK {
+				fmt.Println("Failed to delete scanners: " + resp.Status)
+				return false
+			}
+			fmt.Printf("Get scanners\n")
+			resp, err = http.Get(endpoint + "/api/v1/context")
+			if err != nil {
+				fmt.Println("Failed to reload scanners " + err.Error())
+				return false
+			}
+			if resp.StatusCode != http.StatusOK {
+				fmt.Println("Could not reload scanners: " + resp.Status)
+				return false
+			}
+			fmt.Printf("Retry scan\n")
+			resp, err = http.Post(endpoint+"/api/v1/scan", "application/json", bytes.NewReader(marshalled))
+			if err != nil {
+				fmt.Println("Post failed: " + err.Error())
+				return false
+			}
+			if resp.StatusCode != http.StatusOK {
+				fmt.Println("Post failed with status code: " + resp.Status)
+				return false
+			}
+		} else {
+			return false
+		}
 	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -135,6 +176,8 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 	}
 	var result scanResponseBody
 	err = json.Unmarshal(respBody, &result)
+	fmt.Println("Result: ")
+	fmt.Println(json.MarshalIndent(result, "", "  "))
 	if err != nil {
 		fmt.Println("Cannot unmarshal JSON: " + err.Error())
 		return false
@@ -144,6 +187,7 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 }
 
 func (function scannerFunction) getScannedFile(fileName string, endpoint string, callback func(file io.ReadCloser, fileName string)) {
+	fmt.Printf("Trying to get file %s\n", fileName)
 	resp, err := http.Get(endpoint + "/api/v1/files/" + fileName)
 	if err == nil {
 		callback(resp.Body, fileName)

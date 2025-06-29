@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"slices"
@@ -67,6 +68,7 @@ func (bot telegramBot) run() {
 	bot.bot.Debug = true
 
 	log.Printf("Authorized on account %s", bot.bot.Self.UserName)
+	log.Printf("Allowed users: %v", bot.allowedUserIds)
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -76,7 +78,9 @@ func (bot telegramBot) run() {
 	for update := range updates {
 		// Check if we've gotten a message update.
 		if update.Message != nil {
+			fmt.Printf("Received message from %d\n", update.Message.From.ID)
 			if slices.Contains(bot.allowedUserIds, update.Message.From.ID) {
+				fmt.Println("Message from allowed chat")
 				chatId := update.Message.Chat.ID
 				chat := bot.getChat(chatId)
 				if chat == nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 )
@@ -29,6 +30,7 @@ func (scanner scanner) getFunction(functionName string) *scannerFunction {
 }
 
 func (scanner scanner) scan(functionName string, callback func(file io.ReadCloser, fileName string)) {
+	fmt.Println("Received requirement to scan " + functionName)
 	function := scanner.getFunction(functionName)
 	if function == nil {
 		log.Fatal("Function not found: " + functionName)
