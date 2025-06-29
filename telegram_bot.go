@@ -1,18 +1,22 @@
 package main
 
 import (
+	"io"
 	"log"
 	"slices"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
+type messageCallbackType func(message string, callback func(file io.ReadCloser, fileName string))
+
 type telegramBot struct {
-	keyboard       tgbotapi.ReplyKeyboardMarkup
-	allowedUserIds []int64
-	token          string
-	bot            *tgbotapi.BotAPI
-	chats          []telegramChat
+	keyboard        tgbotapi.ReplyKeyboardMarkup
+	allowedUserIds  []int64
+	token           string
+	bot             *tgbotapi.BotAPI
+	chats           []telegramChat
+	messageCallback messageCallbackType
 }
 
 func stringSliceToKeyboard(values [][]string) tgbotapi.ReplyKeyboardMarkup {
@@ -38,12 +42,13 @@ func getScannerKeyboard() [][]string {
 		"Flachbett Paperless"}}
 }
 
-func newTelegramBot(keyboard [][]string, allowedUserIds []int64, token string) (*telegramBot, error) {
+func newTelegramBot(keyboard [][]string, allowedUserIds []int64, token string, messageCallback messageCallbackType) (*telegramBot, error) {
 	var err error
 	bot := telegramBot{
-		keyboard:       stringSliceToKeyboard(keyboard),
-		allowedUserIds: allowedUserIds,
-		token:          token,
+		keyboard:        stringSliceToKeyboard(keyboard),
+		allowedUserIds:  allowedUserIds,
+		token:           token,
+		messageCallback: messageCallback,
 	}
 	err = bot.initTelegramBot()
 	return &bot, err
@@ -59,8 +64,6 @@ func (bot telegramBot) initTelegramBot() error {
 }
 
 func (bot telegramBot) run() {
-	var err error
-
 	bot.bot.Debug = true
 
 	log.Printf("Authorized on account %s", bot.bot.Self.UserName)
@@ -77,15 +80,12 @@ func (bot telegramBot) run() {
 				chatId := update.Message.Chat.ID
 				chat := bot.getChat(chatId)
 				if chat == nil {
-					bot.chats = append(bot.chats, *newChat(chatId, bot.keyboard))
+					bot.chats = append(bot.chats, *newChat(chatId, bot.keyboard, bot))
 					chat = bot.getChat(chatId)
 				}
 				// Send the message.
 				if chat != nil {
-					msg := chat.createMessage(update.Message.Text)
-					if _, err = bot.bot.Send(msg); err != nil {
-						panic(err)
-					}
+					chat.handleMessage(update.Message, bot.messageCallback)
 				}
 			}
 		} else if update.CallbackQuery != nil {

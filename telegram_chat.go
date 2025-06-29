@@ -1,22 +1,36 @@
 package main
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+import (
+	"io"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
 
 type telegramChat struct {
 	id          int64
 	replyMarkup interface{}
+	bot         telegramBot
 }
 
-func newChat(id int64, replyMarkup interface{}) *telegramChat {
+func newChat(id int64, replyMarkup interface{}, bot telegramBot) *telegramChat {
 	return &telegramChat{
 		id:          id,
 		replyMarkup: replyMarkup,
+		bot:         bot,
 	}
 }
 
-func (chat telegramChat) createMessage(text string) *tgbotapi.MessageConfig {
-	msg := tgbotapi.NewMessage(chat.id, text)
-	msg.ReplyMarkup = chat.replyMarkup
+func (chat telegramChat) sendFile(file io.ReadCloser, fileName string) {
+	tgFile := tgbotapi.FileReader{
+		Name:   fileName,
+		Reader: file,
+	}
 
-	return &msg
+	chat.bot.bot.SendMediaGroup(tgbotapi.NewMediaGroup(chat.id, []interface{}{
+		tgbotapi.NewInputMediaDocument(tgFile),
+	}))
+}
+
+func (chat telegramChat) handleMessage(message *tgbotapi.Message, messageCallback messageCallbackType) {
+	messageCallback(message.Text, chat.sendFile)
 }
