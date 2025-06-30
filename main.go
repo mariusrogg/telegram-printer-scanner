@@ -12,10 +12,12 @@ func main() {
 	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	allowedUserIdsString := strings.Split(os.Getenv("ALLOWED_TELEGRAM_USERS"), ";")
 	scannerEndpoint := os.Getenv("SCANNER_ENDPOINT")
+	scannerDeviceId := os.Getenv("SCANNER_DEVICE_ID")
 
 	fmt.Printf("TELEGRAM_BOT_TOKEN: %s\n", telegramBotToken)
 	fmt.Printf("ALLOWED_TELEGRAM_USERS: %s\n", allowedUserIdsString)
 	fmt.Printf("SCANNER_ENDPOINT: %s\n", scannerEndpoint)
+	fmt.Printf("SCANNER_DEVICE_ID: %s\n", scannerDeviceId)
 
 	var allowedUserIds []int64
 
@@ -48,7 +50,7 @@ func main() {
 
 	fmt.Println(allowedUserIds)
 
-	scanner := newScanner(scannerEndpoint, scannerFunctions, "airscan:w1:Samsung C48x Series (SEC30CDA7AA690C)")
+	scanner := newScanner(scannerEndpoint, scannerFunctions, scannerDeviceId)
 
 	_, err := newTelegramBot(getScannerKeyboard(), allowedUserIds, telegramBotToken, scanner.scan)
 
