@@ -136,7 +136,7 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 			}
 			client := &http.Client{}
 			fmt.Printf("Delete scanners\n")
-			resp, err := client.Do(req)
+			resp, err = client.Do(req)
 			if err != nil {
 				fmt.Println("Could not delete scanners " + err.Error())
 				return false
@@ -176,8 +176,9 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 	}
 	var result scanResponseBody
 	err = json.Unmarshal(respBody, &result)
-	fmt.Println("Result: ")
-	fmt.Println(json.MarshalIndent(result, "", "  "))
+	fmt.Printf("Result (%s): \n", resp.Status)
+	j, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println(string(j))
 	if err != nil {
 		fmt.Println("Cannot unmarshal JSON: " + err.Error())
 		return false
