@@ -9,24 +9,58 @@ import (
 	"time"
 )
 
-type scannerSource string
+type ScannerSource string
 
 const (
-	flatbed scannerSource = "Flatbed"
-	adf     scannerSource = "ADF"
+	flatbed ScannerSource = "Flatbed"
+	adf     ScannerSource = "ADF"
 )
 
-type scannerMode string
+var scannerSource = map[ScannerSource]string{
+	flatbed: string(flatbed),
+	adf:     string(adf),
+}
+
+func (ss ScannerSource) String() string {
+	return scannerSource[ss]
+}
+
+type ScannerMode string
 
 const (
-	color scannerMode = "Color"
-	gray  scannerMode = "Gray"
+	color ScannerMode = "Color"
+	gray  ScannerMode = "Gray"
 )
 
-type scannerFunction struct {
-	name   string
-	mode   scannerMode
-	source scannerSource
+var scannerMode = map[ScannerMode]string{
+	color: string(color),
+	gray:  string(gray),
+}
+
+func (ss ScannerMode) String() string {
+	return scannerMode[ss]
+}
+
+type ScannerTarget string
+
+const (
+	telegram  ScannerTarget = "telegram"
+	paperless ScannerTarget = "paperless"
+)
+
+var scannerTarget = map[ScannerTarget]string{
+	telegram:  string(telegram),
+	paperless: string(paperless),
+}
+
+func (ss ScannerTarget) String() string {
+	return scannerTarget[ss]
+}
+
+type ScannerFunction struct {
+	mode   ScannerMode
+	source ScannerSource
+	target ScannerTarget
 }
 
 type scanBody struct {
@@ -53,7 +87,11 @@ type scanBody struct {
 	Index    int      `json:"index"`
 }
 
-func newScanBody(function scannerFunction, scannerId string) *scanBody {
+func newScanBody(function ScannerFunction, scannerId string) *scanBody {
+	batch := "none"
+	if function.source == adf {
+		batch = "auto"
+	}
 	body := scanBody{
 		Params: struct {
 			DeviceID       string "json:\"deviceId\""
@@ -90,7 +128,7 @@ func newScanBody(function scannerFunction, scannerId string) *scanBody {
 		},
 		Filters:  []string{},
 		Pipeline: "PDF (TIF | @:pipeline.uncompressed)",
-		Batch:    "none",
+		Batch:    batch,
 		Index:    0,
 	}
 	return &body
@@ -111,19 +149,22 @@ type scanResponseBody struct {
 	} `json:"file"`
 }
 
-func (function scannerFunction) scan(endpoint string, scannerId string, callback func(file io.ReadCloser, fileName string)) bool {
+func (function ScannerFunction) scan(endpoint string, scannerId string) (io.ReadCloser, string, error) {
+	var scanClientWithTimeout = &http.Client{
+		Timeout: time.Minute * 20,
+	}
 	fmt.Println("Starting scan")
 	var err error
 	body := newScanBody(function, scannerId)
 	marshalled, err := json.Marshal(body)
 	if err != nil {
 		fmt.Println("Cannot encode JSON: " + err.Error())
-		return false
+		return nil, "", err
 	}
-	resp, err := http.Post(endpoint+"/api/v1/scan", "application/json", bytes.NewReader(marshalled))
+	resp, err := scanClientWithTimeout.Post(endpoint+"/api/v1/scan", "application/json", bytes.NewReader(marshalled))
 	if err != nil {
 		fmt.Println("Post failed: " + err.Error())
-		return false
+		return nil, "", err
 	}
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println("Post failed with status code: " + resp.Status)
@@ -132,47 +173,47 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 			req, err := http.NewRequest(http.MethodDelete, endpoint+"/api/v1/context", nil)
 			if err != nil {
 				fmt.Println("Could not create delete request for scanners")
-				return false
+				return nil, "", err
 			}
 			client := &http.Client{}
 			fmt.Printf("Delete scanners\n")
 			resp, err = client.Do(req)
 			if err != nil {
 				fmt.Println("Could not delete scanners " + err.Error())
-				return false
+				return nil, "", err
 			}
 			if resp.StatusCode != http.StatusOK {
 				fmt.Println("Failed to delete scanners: " + resp.Status)
-				return false
+				return nil, "", fmt.Errorf("failed to delete scanners: %s", resp.Status)
 			}
 			fmt.Printf("Get scanners\n")
 			resp, err = http.Get(endpoint + "/api/v1/context")
 			if err != nil {
 				fmt.Println("Failed to reload scanners " + err.Error())
-				return false
+				return nil, "", err
 			}
 			if resp.StatusCode != http.StatusOK {
 				fmt.Println("Could not reload scanners: " + resp.Status)
-				return false
+				return nil, "", fmt.Errorf("could not reload scanners: %s", resp.Status)
 			}
 			fmt.Printf("Retry scan\n")
-			resp, err = http.Post(endpoint+"/api/v1/scan", "application/json", bytes.NewReader(marshalled))
+			resp, err = scanClientWithTimeout.Post(endpoint+"/api/v1/scan", "application/json", bytes.NewReader(marshalled))
 			if err != nil {
 				fmt.Println("Post failed: " + err.Error())
-				return false
+				return nil, "", err
 			}
 			if resp.StatusCode != http.StatusOK {
 				fmt.Println("Post failed with status code: " + resp.Status)
-				return false
+				return nil, "", fmt.Errorf("post failed with status code: %s", resp.Status)
 			}
 		} else {
-			return false
+			return nil, "", fmt.Errorf("post failed with status code: %s", resp.Status)
 		}
 	}
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Read response failed: " + err.Error())
-		return false
+		return nil, "", err
 	}
 	var result scanResponseBody
 	err = json.Unmarshal(respBody, &result)
@@ -181,16 +222,17 @@ func (function scannerFunction) scan(endpoint string, scannerId string, callback
 	fmt.Println(string(j))
 	if err != nil {
 		fmt.Println("Cannot unmarshal JSON: " + err.Error())
-		return false
+		return nil, "", err
 	}
-	go function.getScannedFile(result.File.Name, endpoint, callback)
-	return true
+	return function.getScannedFile(result.File.Name, endpoint)
+
 }
 
-func (function scannerFunction) getScannedFile(fileName string, endpoint string, callback func(file io.ReadCloser, fileName string)) {
+func (function ScannerFunction) getScannedFile(fileName string, endpoint string) (io.ReadCloser, string, error) {
 	fmt.Printf("Trying to get file %s\n", fileName)
 	resp, err := http.Get(endpoint + "/api/v1/files/" + fileName)
 	if err == nil {
-		callback(resp.Body, fileName)
+		return resp.Body, fileName, nil
 	}
+	return nil, fileName, err
 }

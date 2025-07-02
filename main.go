@@ -30,29 +30,29 @@ func main() {
 		}
 	}
 
-	scannerFunctions := []scannerFunction{{
-		name:   "Einzug Farbe",
+	scannerFunctions := []ScannerFunction{{
 		source: adf,
 		mode:   color,
+		target: telegram,
 	}, {
-		name:   "Flachbett Farbe",
 		source: flatbed,
 		mode:   color,
+		target: telegram,
 	}, {
-		name:   "Einzug S/W",
 		source: adf,
 		mode:   gray,
+		target: telegram,
 	}, {
-		name:   "Flachbett S/W",
 		source: flatbed,
 		mode:   gray,
+		target: telegram,
 	}}
 
 	fmt.Println(allowedUserIds)
 
 	scanner := newScanner(scannerEndpoint, scannerFunctions, scannerDeviceId)
 
-	_, err := newTelegramBot(getScannerKeyboard(), allowedUserIds, telegramBotToken, scanner.scan)
+	_, err := newTelegramBot(getScannerKeyboard(), allowedUserIds, telegramBotToken, scanner)
 
 	if err != nil {
 		log.Panic(err)
