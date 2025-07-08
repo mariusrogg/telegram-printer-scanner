@@ -185,7 +185,10 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 				chat.prepStateUseLast()
 				break
 			}
-			chat.finish(chat.currentTarget, orderAndMerge(frontPages, rearPages), filename)
+			err = chat.finish(chat.currentTarget, orderAndMerge(frontPages, rearPages), filename)
+			if err != nil {
+				fmt.Println(err)
+			}
 		} else {
 			chat.prepStateUseLast()
 		}
@@ -195,7 +198,10 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 			if err != nil {
 				fmt.Printf("failed to scan: %s\n", err.Error())
 			} else {
-				chat.finish(chat.currentTarget, file, filename)
+				err = chat.finish(chat.currentTarget, file, filename)
+				if err != nil {
+					fmt.Println(err)
+				}
 			}
 		}
 		chat.prepStateUseLast()
