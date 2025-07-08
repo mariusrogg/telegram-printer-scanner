@@ -9,12 +9,13 @@ import (
 )
 
 type telegramBot struct {
-	keyboard       tgbotapi.ReplyKeyboardMarkup
-	allowedUserIds []int64
-	token          string
-	bot            *tgbotapi.BotAPI
-	chats          []*telegramChat
-	scanner        *scanner
+	allowedUserIds    []int64
+	token             string
+	paperlessEndpoint string
+	paperlessToken    string
+	bot               *tgbotapi.BotAPI
+	chats             []*telegramChat
+	scanner           *scanner
 }
 
 func stringSliceToKeyboard(values []string) tgbotapi.InlineKeyboardMarkup {
@@ -34,22 +35,14 @@ func stringMatrixToKeyboard(values [][]string) tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(keyboardRows...)
 }
 
-func getScannerKeyboard() [][]string {
-	return [][]string{{
-		"Einzug Farbe",
-		"Einzug S/W",
-		"Einzug Paperless"}, {
-		"Flachbett Farbe",
-		"Flachbett S/W",
-		"Flachbett Paperless"}}
-}
-
-func newTelegramBot(keyboard [][]string, allowedUserIds []int64, token string, scanner *scanner) (*telegramBot, error) {
+func newTelegramBot(allowedUserIds []int64, token string, scanner *scanner, paperlessEndpoint string, paperlessToken string) (*telegramBot, error) {
 	var err error
 	bot := telegramBot{
-		allowedUserIds: allowedUserIds,
-		token:          token,
-		scanner:        scanner,
+		allowedUserIds:    allowedUserIds,
+		token:             token,
+		scanner:           scanner,
+		paperlessEndpoint: paperlessEndpoint,
+		paperlessToken:    paperlessToken,
 	}
 	err = bot.initTelegramBot()
 	return &bot, err
@@ -82,7 +75,7 @@ func (bot telegramBot) run() {
 			fmt.Println("Message from allowed chat")
 			chat := bot.getChat(chatId)
 			if chat == nil {
-				bot.chats = append(bot.chats, newChat(chatId, bot.keyboard, bot, bot.scanner))
+				bot.chats = append(bot.chats, newChat(chatId, bot, bot.scanner, bot.paperlessEndpoint, bot.paperlessToken))
 				chat = bot.getChat(chatId)
 			}
 			// Check if we've gotten a message update.

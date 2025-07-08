@@ -20,10 +20,6 @@ func newScanner(endpoint string, functions []ScannerFunction, deviceId string) *
 	}
 }
 
-func (scanner scanner) getFunctions() []ScannerFunction {
-	return scanner.functions
-}
-
 func (scanner scanner) getTargets() []ScannerTarget {
 	targets := []ScannerTarget{}
 	for _, function := range scanner.functions {

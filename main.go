@@ -13,11 +13,15 @@ func main() {
 	allowedUserIdsString := strings.Split(os.Getenv("ALLOWED_TELEGRAM_USERS"), ";")
 	scannerEndpoint := os.Getenv("SCANNER_ENDPOINT")
 	scannerDeviceId := os.Getenv("SCANNER_DEVICE_ID")
+	paperlessEndpoint := os.Getenv("PAPERLESS_ENDPOINT")
+	paperlessToken := os.Getenv("PAPERLESS_TOKEN")
 
 	fmt.Printf("TELEGRAM_BOT_TOKEN: %s\n", telegramBotToken)
 	fmt.Printf("ALLOWED_TELEGRAM_USERS: %s\n", allowedUserIdsString)
 	fmt.Printf("SCANNER_ENDPOINT: %s\n", scannerEndpoint)
 	fmt.Printf("SCANNER_DEVICE_ID: %s\n", scannerDeviceId)
+	fmt.Printf("PAPERLESS_ENDPOINT: %s\n", paperlessEndpoint)
+	fmt.Printf("PAPERLESS_TOKEN: %s\n", paperlessToken)
 
 	var allowedUserIds []int64
 
@@ -46,13 +50,21 @@ func main() {
 		source: flatbed,
 		mode:   gray,
 		target: telegram,
+	}, {
+		source: adf,
+		mode:   gray,
+		target: paperless,
+	}, {
+		source: flatbed,
+		mode:   gray,
+		target: paperless,
 	}}
 
 	fmt.Println(allowedUserIds)
 
 	scanner := newScanner(scannerEndpoint, scannerFunctions, scannerDeviceId)
 
-	_, err := newTelegramBot(getScannerKeyboard(), allowedUserIds, telegramBotToken, scanner)
+	_, err := newTelegramBot(allowedUserIds, telegramBotToken, scanner, paperlessEndpoint, paperlessToken)
 
 	if err != nil {
 		log.Panic(err)

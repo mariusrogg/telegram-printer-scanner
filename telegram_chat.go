@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime/multipart"
+	"net/http"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -58,39 +60,43 @@ func (d Decision) String() string {
 }
 
 type telegramChat struct {
-	id              int64
-	replyMarkup     interface{}
-	bot             telegramBot
-	scanner         *scanner
-	state           ChatState
-	currentTarget   ScannerTarget
-	currentSource   ScannerSource
-	currentMode     ScannerMode
-	currentDuplex   Decision
-	currentMessage  tgbotapi.Message
-	currentFunction ScannerFunction
-	duplexFrontFile io.ReadSeeker
+	id                int64
+	bot               telegramBot
+	scanner           *scanner
+	state             ChatState
+	paperlessEndpoint string
+	paperlessToken    string
+	currentTarget     ScannerTarget
+	currentSource     ScannerSource
+	currentMode       ScannerMode
+	currentDuplex     Decision
+	currentMessage    tgbotapi.Message
+	currentFunction   ScannerFunction
+	duplexFrontFile   io.ReadSeeker
 }
 
-func newChat(id int64, replyMarkup interface{}, bot telegramBot, scanner *scanner) *telegramChat {
+func newChat(id int64, bot telegramBot, scanner *scanner, paperlessEndpoint string, paperlessToken string) *telegramChat {
 	return &telegramChat{
-		id:          id,
-		replyMarkup: replyMarkup,
-		bot:         bot,
-		scanner:     scanner,
-		state:       stateInit,
+		id:                id,
+		bot:               bot,
+		scanner:           scanner,
+		state:             stateInit,
+		paperlessEndpoint: paperlessEndpoint,
+		paperlessToken:    paperlessToken,
 	}
 }
 
-func (chat telegramChat) sendFile(file io.ReadCloser, fileName string) {
+func (chat telegramChat) sendFile(file io.ReadCloser, fileName string) error {
 	tgFile := tgbotapi.FileReader{
 		Name:   fileName,
 		Reader: file,
 	}
+	defer file.Close()
 
-	chat.bot.bot.SendMediaGroup(tgbotapi.NewMediaGroup(chat.id, []interface{}{
+	_, err := chat.bot.bot.SendMediaGroup(tgbotapi.NewMediaGroup(chat.id, []interface{}{
 		tgbotapi.NewInputMediaDocument(tgFile),
 	}))
+	return err
 }
 
 // Converts a slice of any type that implements fmt.Stringer to a slice of strings.
@@ -105,7 +111,9 @@ func sliceToStringSlice[T fmt.Stringer](input []T) []string {
 func (chat *telegramChat) handleMessage(message *tgbotapi.Message) {
 	fmt.Println("Message received: " + message.Text)
 	fmt.Println("Current state: " + chat.state.String())
-	chat.prepStateUseLast()
+	if message.Text == "/restart" || chat.state == stateInit {
+		chat.runInit()
+	}
 }
 
 func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
@@ -113,11 +121,7 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 	fmt.Println("Current state: " + chat.state.String())
 	switch chat.state {
 	case stateInit:
-		if chat.currentTarget != "" && chat.currentSource != "" && chat.currentMode != "" {
-			chat.prepStateUseLast()
-		} else {
-			chat.prepStateTarget()
-		}
+		chat.runInit()
 
 	case stateUseLast:
 		if Decision(callbackQuery.Data) == yes {
@@ -181,7 +185,7 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 				chat.prepStateUseLast()
 				break
 			}
-			chat.sendFile(orderAndMerge(frontPages, rearPages), filename)
+			chat.finish(chat.currentTarget, orderAndMerge(frontPages, rearPages), filename)
 		} else {
 			chat.prepStateUseLast()
 		}
@@ -191,7 +195,7 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 			if err != nil {
 				fmt.Printf("failed to scan: %s\n", err.Error())
 			} else {
-				chat.sendFile(file, filename)
+				chat.finish(chat.currentTarget, file, filename)
 			}
 		}
 		chat.prepStateUseLast()
@@ -200,6 +204,75 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 		fmt.Printf("Chat state %s is unknown", chat.state)
 	}
 
+}
+
+func (chat *telegramChat) runInit() {
+	if chat.currentMessage.MessageID != 0 {
+		deleteMessage := tgbotapi.NewDeleteMessage(chat.id, chat.currentMessage.MessageID)
+		chat.bot.bot.Send(deleteMessage)
+		chat.currentMessage.MessageID = 0
+	}
+	if chat.currentTarget != "" && chat.currentSource != "" && chat.currentMode != "" {
+		chat.prepStateUseLast()
+	} else {
+		chat.prepStateTarget()
+	}
+}
+
+func (chat *telegramChat) finish(target ScannerTarget, file io.ReadCloser, fileName string) error {
+	switch target {
+	case telegram:
+		return chat.sendFile(file, fileName)
+	case paperless:
+		url := chat.paperlessEndpoint + "/api/documents/post_document/"
+		method := "POST"
+
+		payload := &bytes.Buffer{}
+		writer := multipart.NewWriter(payload)
+		err := writer.WriteField("from_webui", "false")
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+		part, err := writer.CreateFormFile("document", fileName)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(part, file)
+		if err != nil {
+			return err
+		}
+		err = writer.Close()
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		client := &http.Client{}
+		req, err := http.NewRequest(method, url, payload)
+
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		req.Header.Add("accept", "application/json")
+		req.Header.Add("Authorization", "Token "+chat.paperlessToken)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		res, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+
+		_, err = io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("target not supported")
 }
 
 func orderAndMerge(front []*api.PageSpan, rear []*api.PageSpan) io.ReadCloser {
@@ -263,10 +336,6 @@ func (chat *telegramChat) chooseScanState() {
 }
 
 func (chat *telegramChat) prepStateUseLast() {
-	if chat.currentMessage.MessageID != 0 {
-		deleteMessage := tgbotapi.NewDeleteMessage(chat.id, chat.currentMessage.MessageID)
-		chat.bot.bot.Send(deleteMessage)
-	}
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("Use last configuration:\nTarget: %s\nSource: %s\nMode: %s\n", chat.currentTarget, chat.currentSource, chat.currentMode))
 	if chat.currentMode == ScannerMode(adf) {
