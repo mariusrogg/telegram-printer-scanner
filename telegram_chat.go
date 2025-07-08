@@ -224,6 +224,7 @@ func (chat *telegramChat) finish(target ScannerTarget, file io.ReadCloser, fileN
 	case telegram:
 		return chat.sendFile(file, fileName)
 	case paperless:
+
 		url := chat.paperlessEndpoint + "/api/documents/post_document/"
 		method := "POST"
 
@@ -266,10 +267,11 @@ func (chat *telegramChat) finish(target ScannerTarget, file io.ReadCloser, fileN
 		}
 		defer res.Body.Close()
 
-		_, err = io.ReadAll(res.Body)
+		body, err := io.ReadAll(res.Body)
 		if err != nil {
 			return err
 		}
+		fmt.Println(string(body))
 		return nil
 	}
 	return fmt.Errorf("target not supported")
