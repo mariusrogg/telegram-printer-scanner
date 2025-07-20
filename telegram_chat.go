@@ -186,6 +186,7 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 				break
 			}
 			err = chat.finish(chat.currentTarget, orderAndMerge(frontPages, rearPages), filename)
+			chat.prepStateUseLast()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -199,6 +200,7 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 				fmt.Printf("failed to scan: %s\n", err.Error())
 			} else {
 				err = chat.finish(chat.currentTarget, file, filename)
+				chat.prepStateUseLast()
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -212,12 +214,16 @@ func (chat *telegramChat) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQu
 
 }
 
-func (chat *telegramChat) runInit() {
+func (chat *telegramChat) deleteLastMessage() {
 	if chat.currentMessage.MessageID != 0 {
 		deleteMessage := tgbotapi.NewDeleteMessage(chat.id, chat.currentMessage.MessageID)
 		chat.bot.bot.Send(deleteMessage)
 		chat.currentMessage.MessageID = 0
 	}
+}
+
+func (chat *telegramChat) runInit() {
+	chat.deleteLastMessage()
 	if chat.currentTarget != "" && chat.currentSource != "" && chat.currentMode != "" {
 		chat.prepStateUseLast()
 	} else {
@@ -344,6 +350,7 @@ func (chat *telegramChat) chooseScanState() {
 }
 
 func (chat *telegramChat) prepStateUseLast() {
+	chat.deleteLastMessage()
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("Use last configuration:\nTarget: %s\nSource: %s\nMode: %s\n", chat.currentTarget, chat.currentSource, chat.currentMode))
 	if chat.currentMode == ScannerMode(adf) {
