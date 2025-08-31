@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/pdfcpu/pdfcpu/pkg/api"
 )
 
 func main() {
@@ -22,6 +24,9 @@ func main() {
 	fmt.Printf("SCANNER_DEVICE_ID: %s\n", scannerDeviceId)
 	fmt.Printf("PAPERLESS_ENDPOINT: %s\n", paperlessEndpoint)
 	fmt.Printf("PAPERLESS_TOKEN: %s\n", paperlessToken)
+
+	// Disable config dir for pdfcpu
+	api.DisableConfigDir()
 
 	var allowedUserIds []int64
 
