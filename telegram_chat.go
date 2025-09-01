@@ -342,7 +342,7 @@ func (chat *telegramChat) updateMessage(text string, replyMarkup tgbotapi.Inline
 }
 
 func (chat *telegramChat) chooseScanState() {
-	if chat.currentDuplex == yes {
+	if chat.currentSource == adf && chat.currentDuplex == yes {
 		chat.prepStateScanDuplexFront()
 	} else {
 		chat.prepStateScanSimple()
