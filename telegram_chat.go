@@ -232,6 +232,9 @@ func (chat *telegramChat) runInit() {
 }
 
 func (chat *telegramChat) finish(target ScannerTarget, file io.ReadCloser, fileName string) error {
+	if file == nil {
+		return fmt.Errorf("could not finish, file was nil")
+	}
 	switch target {
 	case telegram:
 		return chat.sendFile(file, fileName)
