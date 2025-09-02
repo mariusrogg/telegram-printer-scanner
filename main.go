@@ -63,6 +63,14 @@ func main() {
 		source: flatbed,
 		mode:   gray,
 		target: paperless,
+	}, {
+		source: adf,
+		mode:   color,
+		target: paperless,
+	}, {
+		source: flatbed,
+		mode:   color,
+		target: paperless,
 	}}
 
 	fmt.Println(allowedUserIds)
