@@ -378,6 +378,7 @@ func (chat *telegramChat) prepStateScanDuplexFront() {
 	chat.currentFunction = *chat.scanner.getFunction(chat.currentTarget, chat.currentSource, chat.currentMode)
 }
 func (chat *telegramChat) prepStateScanDuplexRear() {
+	chat.deleteLastMessage()
 	prepState(chat, stateScanDuplexRear, []fmt.Stringer{yes, no}, "Start rear scan?", false)
 	chat.currentFunction = *chat.scanner.getFunction(chat.currentTarget, chat.currentSource, chat.currentMode)
 }
@@ -389,7 +390,7 @@ func (chat *telegramChat) prepStateScanSimple() {
 
 func prepState[T fmt.Stringer](chat *telegramChat, state ChatState, slice []T, message string, init bool) {
 	keyboard := stringSliceToKeyboard(sliceToStringSlice(slice))
-	if init {
+	if init || chat.currentMessage.MessageID == 0 {
 		var err error
 		answer := tgbotapi.NewMessage(chat.id, message)
 		answer.ReplyMarkup = keyboard
