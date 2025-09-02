@@ -356,7 +356,7 @@ func (chat *telegramChat) prepStateUseLast() {
 	chat.deleteLastMessage()
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("Use last configuration:\nTarget: %s\nSource: %s\nMode: %s\n", chat.currentTarget, chat.currentSource, chat.currentMode))
-	if chat.currentMode == ScannerMode(adf) {
+	if chat.currentSource == adf {
 		builder.WriteString(fmt.Sprintf("Duplex: %s", chat.currentDuplex))
 	}
 	prepState(chat, stateUseLast, []fmt.Stringer{yes, no}, builder.String(), true)
